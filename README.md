@@ -29,3 +29,11 @@ ln -sf ~/claude-toolkit/skills/transcribe-meeting  ~/.claude/skills/transcribe-m
 - `markdown-export`：pandoc, python-docx, lxml, pymupdf, Google Chrome（PDF生成）
 - `markdown-to-gdocs`：Node.js, 自分のGoogle Cloud OAuthクライアント（詳細はSKILL.md参照）
 - `transcribe-meeting`：google-genai, ffmpeg/ffprobe, Gemini APIキー（詳細はSKILL.md参照）
+
+## その他のツール
+
+Skill（自動発見）ではなく、個別にセットアップして使うツール。
+
+| ツール | 内容 |
+|---|---|
+| [statusline](tools/statusline/README.md) | Claude Codeのターミナル下部に使用状況（コンテキスト・レート制限・作業フォルダ・アカウント）を表示 |
