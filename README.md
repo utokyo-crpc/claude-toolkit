@@ -2,8 +2,6 @@
 
 Claude Code用の汎用Skill集。個人情報・秘密情報を一切含まない、プロジェクト非依存のツール群。
 
-[saito-la](https://github.com/saito-la) と [utokyo-crpc](https://github.com/utokyo-crpc) の両方に同一内容を配布している（1つのローカルリポジトリから両方のGitHub Organizationへ同時にpushする運用）。
-
 ## 収録スキル
 
 | スキル | 内容 |
@@ -31,7 +29,3 @@ ln -sf ~/claude-toolkit/skills/transcribe-meeting  ~/.claude/skills/transcribe-m
 - `markdown-export`：pandoc, python-docx, lxml, pymupdf, Google Chrome（PDF生成）
 - `markdown-to-gdocs`：Node.js, 自分のGoogle Cloud OAuthクライアント（詳細はSKILL.md参照）
 - `transcribe-meeting`：google-genai, ffmpeg/ffprobe, Gemini APIキー（詳細はSKILL.md参照）
-
-## メンテナンス方針
-
-このリポジトリはsaito-la・utokyo-crpc双方に共通する汎用ツールのみを置く場所。特定の家族・組織にしか関係ない内容（個人設定テンプレート、組織固有の業務ツール等）はここに置かない。
