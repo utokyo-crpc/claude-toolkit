@@ -56,7 +56,9 @@ if five is not None:
 week_data = data.get('rate_limits', {}).get('seven_day', {})
 week = week_data.get('used_percentage')
 if week is not None:
-    parts.append(fmt_rate('7d', week, week_data.get('resets_at'), '%-m/%-d'))
+    # ゼロ埋めなしの月/日指定子はOS依存（Unix系: %-m/%-d、Windows: %#m/%#d）
+    date_fmt = '%#m/%#d' if sys.platform == 'win32' else '%-m/%-d'
+    parts.append(fmt_rate('7d', week, week_data.get('resets_at'), date_fmt))
 
 cwd = data.get('cwd') or data.get('workspace', {}).get('current_dir', '')
 folder = os.path.basename(cwd) if cwd else '-'
@@ -68,30 +70,33 @@ CACHE_TTL = 600  # 10分
 
 def get_account_label():
     try:
-        labels = json.load(open(LABELS_FILE))
+        labels = json.load(open(LABELS_FILE, encoding='utf-8'))
     except (FileNotFoundError, json.JSONDecodeError):
         labels = {}
 
     # キャッシュが有効なら即返す
     try:
         if time.time() - os.path.getmtime(CACHE_FILE) < CACHE_TTL:
-            email = open(CACHE_FILE).read().strip()
+            email = open(CACHE_FILE, encoding='utf-8').read().strip()
             return labels.get(email, email.split('@')[0] if email else '-')
     except FileNotFoundError:
         pass
 
-    # キャッシュ期限切れ/なし → バックグラウンドで更新
-    subprocess.Popen(
-        ['sh', '-c',
-         'claude auth status 2>/dev/null'
-         ' | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get(\'email\',\'\'), end=\'\')"'
-         ' > ~/.claude/.auth-cache'],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    # キャッシュ期限切れ/なし → バックグラウンドで更新（sh依存を避け、Pure Pythonで両OS対応）
+    cache_script = (
+        'import subprocess,json,pathlib,sys;'
+        'r=subprocess.run(["claude","auth","status"],capture_output=True,text=True,encoding="utf-8");'
+        'd=json.loads(r.stdout) if r.returncode==0 else {};'
+        f'pathlib.Path(r"{CACHE_FILE}").write_text(d.get("email",""),encoding="utf-8")'
     )
+    popen_kwargs = {'stdout': subprocess.DEVNULL, 'stderr': subprocess.DEVNULL}
+    if sys.platform == 'win32':
+        popen_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+    subprocess.Popen([sys.executable, '-c', cache_script], **popen_kwargs)
 
     # 古いキャッシュがあればそれを返す、なければ '-'
     try:
-        email = open(CACHE_FILE).read().strip()
+        email = open(CACHE_FILE, encoding='utf-8').read().strip()
         return labels.get(email, email.split('@')[0] if email else '-')
     except FileNotFoundError:
         return '-'

@@ -19,14 +19,22 @@ Claude Codeのターミナル下部に、現在のモデル・コンテキスト
 
 ## セットアップ
 
-Python標準ライブラリのみ使用（追加インストール不要）。
+Python標準ライブラリのみ使用（追加インストール不要）。日付フォーマット・キャッシュ更新方式はスクリプト内で自動的にOS判定するため、Mac/Windowsとも同じファイルでよい。
+
+**Mac / Linux：**
 
 ```bash
 ln -sf <このディレクトリ>/statusline.py ~/.claude/statusline.py
 chmod +x ~/.claude/statusline.py
 ```
 
-`~/.claude/settings.json` のトップレベルに `statusLine` キーを追加する（既存のキーは保持）：
+**Windows（PowerShell、Windows Terminal推奨）：**
+
+```powershell
+Copy-Item "<このディレクトリ>\statusline.py" "$env:USERPROFILE\.claude\statusline.py"
+```
+
+`~/.claude/settings.json`（Windowsは `%USERPROFILE%\.claude\settings.json`）のトップレベルに `statusLine` キーを追加する（既存のキーは保持）：
 
 ```json
 {
@@ -36,6 +44,8 @@ chmod +x ~/.claude/statusline.py
   }
 }
 ```
+
+Windowsで `python3` コマンドがない場合は `"command": "python ~/.claude/statusline.py"` にする。
 
 ## アカウント表示のラベル設定
 
@@ -54,8 +64,8 @@ chmod +x ~/.claude/statusline.py
 
 ## 動作しない場合のチェックリスト
 
-- `~/.claude/statusline.py` が存在し実行権限があるか：`ls -la ~/.claude/statusline.py`
-- Python 3 が使えるか：`python3 --version`
+- `~/.claude/statusline.py` が存在するか（Mac/Linuxは実行権限も）：`ls -la ~/.claude/statusline.py`
+- Python 3 が使えるか：`python3 --version`（Windowsは `python --version` または `py --version`）
 - `settings.json` が正しい JSON か：`python3 -m json.tool ~/.claude/settings.json`
-- Windows の場合、`%-m/%-d` のフォーマット指定子が非対応。スクリプト内の該当箇所を `%m/%d` に変更する
-- ターミナルがステータスライン表示に対応しているか（iTerm2 推奨）
+- ターミナルがステータスライン表示に対応しているか（Mac: iTerm2推奨。Windows: Windows Terminal必須、cmd.exeは非対応）
+- 記号が文字化けする場合、ターミナルのフォント設定でNerd Fontまたは等幅フォントを使用する
