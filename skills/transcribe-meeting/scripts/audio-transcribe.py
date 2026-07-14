@@ -29,7 +29,7 @@ PRO_MODEL        = "gemini-2.5-pro"     # 品質不良時の自動格上げ先
 FAST_MODEL       = "gemini-2.5-flash"   # 課金枠制限時のフォールバック先
 POST_MODEL       = "gemini-2.5-flash"   # verbatim / summary 生成（後処理）
 LONG_AUDIO_THRESHOLD_SEC = 15 * 60      # これを超える音声は分割モードへ直行
-DEFAULT_CHUNK_MIN = 10                  # 分割時のチャンク長（分）
+DEFAULT_CHUNK_MIN = 15                  # 分割時のチャンク長（分）。大きいほど総リクエスト数が減る
 MIN_CHARS_PER_SEC = 1.5                 # チャンク文字数の下限目安（下回れば途切れの疑い）
 POST_BLOCK_CHARS = 24000                # verbatim/summary を分割処理する塊サイズ
 
@@ -62,29 +62,66 @@ def _record_usage(stage: str, model: str, resp) -> None:
     })
 
 
+class QuotaExhaustedError(RuntimeError):
+    """無料枠の1日リクエスト上限に達した（当日中は再実行しても回復しない）。上位で明確に案内して停止する。"""
+
+
 def _is_tier_block(e) -> bool:
-    """モデルがこのAPIキーの課金枠で使えない（free tier で limit:0 等）か。リトライ無意味。"""
+    """このモデルがAPIキーの枠で使えない（limit: 0）か。真なら呼び出し側で別モデルへ格下げすべき。"""
     if getattr(e, "code", None) != 429:
         return False
+    return "limit: 0" in str(getattr(e, "message", "") or e)
+
+
+def _quota_kind(e) -> str:
+    """429 のクォータ種別を返す。'day'（日次上限＝当日ハードストップ）／'minute'（分次＝待てば回復）／''。"""
+    if getattr(e, "code", None) != 429:
+        return ""
     msg = str(getattr(e, "message", "") or e)
-    return ("limit: 0" in msg) or ("free_tier" in msg) or ("FreeTier" in msg)
+    if "PerDay" in msg or "requests_per_day" in msg:
+        return "day"
+    if "PerMinute" in msg or "requests_per_minute" in msg:
+        return "minute"
+    if "free_tier" in msg or "FreeTier" in msg:   # 期間表記が無い free tier は保守的に日次扱い
+        return "day"
+    return ""
 
 
-def generate_with_retry(client, stage: str, max_attempts: int = 5, **kwargs):
-    """generate_content を一時的なサーバーエラー（503/429等）でリトライし、トークンを記録する。"""
+def _retry_delay_seconds(e):
+    """エラーメッセージ中の retryDelay 秒数を取り出す（無ければ None）。"""
+    msg = str(getattr(e, "message", "") or e)
+    m = re.search(r"retry(?:Delay)?['\"\s:in]+?(\d+)\s*s", msg, re.I)
+    return int(m.group(1)) if m else None
+
+
+def generate_with_retry(client, stage: str, max_attempts: int = 4, **kwargs):
+    """generate_content を実行。分次レート(429)・サーバー過負荷(503/500)は限定的にリトライし、
+    日次上限(429 free tier / PerDay)は当日回復しないため即 QuotaExhaustedError で停止する
+    （＝失敗を長引かせず、無料枠を無駄に消費しない）。"""
     for attempt in range(1, max_attempts + 1):
         try:
             resp = client.models.generate_content(**kwargs)
             _record_usage(stage, kwargs.get("model", ""), resp)
             return resp
         except (errors.ServerError, errors.ClientError) as e:
+            code = getattr(e, "code", None)
             if _is_tier_block(e):
-                raise                       # 課金枠の問題。リトライせず即上位へ（呼び出し側で格下げ）
-            transient = getattr(e, "code", None) in (429, 500, 503)
+                raise                        # モデル未提供。呼び出し側で格下げ
+            if code == 429 and _quota_kind(e) == "day":
+                raise QuotaExhaustedError(
+                    "Gemini API 無料枠の1日リクエスト上限に達しました。"
+                    "当日中は再実行しても回復しません（リセットは太平洋時間0時＝日本時間16時頃）。"
+                    "billing を有効化するか、枠リセット後に再実行してください。")
+            transient = code in (429, 500, 503)
             if not transient or attempt == max_attempts:
                 raise
-            wait = min(60, 5 * 2 ** (attempt - 1))
-            print(f"\n  一時的なエラー（{e.code}）。{wait}秒後にリトライします... ({attempt}/{max_attempts})",
+            if code == 429:                  # 分次レート：サーバー指定の待機を尊重
+                wait = min(120, (_retry_delay_seconds(e) or 30) + 2)
+            elif code == 503:                # 過負荷：短く抑える（長引く時は早めに諦める）
+                wait = min(30, 8 * attempt)
+            else:
+                wait = min(60, 5 * 2 ** (attempt - 1))
+            print(f"\n  一時的なエラー（{code}）。{wait}秒後にリトライ ({attempt}/{max_attempts})",
                   end="", flush=True)
             time.sleep(wait)
 
@@ -291,6 +328,12 @@ def transcribe_file(client, path: Path, prompt: str, model: str, stage: str = "t
             _FORCED_MODEL = FAST_MODEL
             return transcribe_file(client, path, prompt, FAST_MODEL, stage)
         raise
+    except Exception:                        # QuotaExhaustedError 等でもアップロード済みファイルを掃除
+        try:
+            client.files.delete(name=f.name)
+        except Exception:
+            pass
+        raise
     client.files.delete(name=f.name)
     print(" 完了")
     return resp.text or ""
@@ -328,17 +371,37 @@ def transcribe_with_recovery(client, path: Path, prompt: str, model: str,
     return f"[要確認: 文字起こし品質低下（{reason}）]\n{text}"
 
 
+def _chunk_cache_path(chunk: Path) -> Path:
+    """チャンクの文字起こし結果を保存するサイドカーパス（<chunk>.txt）。"""
+    return chunk.with_name(chunk.name + ".txt")
+
+
 def transcribe_chunks(client, chunks: list, prompt: str, model: str) -> str:
-    """チャンクを順次文字起こしして Part ヘッダー付きで結合する。"""
+    """チャンクを順次文字起こしして Part ヘッダー付きで結合する。
+    成功済みチャンクは <chunk>.txt にキャッシュし、再実行時は品質を満たすものを再利用する
+    （失敗ジョブを丸ごと再実行しても全チャンクを再送信せず、無料枠の無駄消費を防ぐ）。"""
     if not chunks:
         raise FileNotFoundError("音声チャンクが見つかりません")
-    print(f"{len(chunks)} チャンクを処理します")
+    n = len(chunks)
+    print(f"{n} チャンクを処理します"
+          f"（推定リクエスト数 約{n}〜{n * 2}回。無料枠は {model} 20回/日。"
+          f"済チャンクはキャッシュ再利用）")
     parts, covered = [], 0.0
     for i, chunk in enumerate(chunks):
-        print(f"[{i + 1}/{len(chunks)}]", end=" ")
         d = probe_duration(chunk)
         covered += d or 0
+        min_chars = int(d * MIN_CHARS_PER_SEC) if d else None
+        cache = _chunk_cache_path(chunk)
+        if cache.exists() and cache.stat().st_size > 0:
+            cached = cache.read_text(encoding="utf-8")
+            ok, _ = check_quality(cached, min_chars=min_chars)
+            if ok:                                    # 品質を満たす済チャンクのみ再利用
+                print(f"[{i + 1}/{n}] キャッシュ再利用: {cache.name}")
+                parts.append(f"## Part {i + 1} — {chunk.name}\n\n{cached}")
+                continue
+        print(f"[{i + 1}/{n}]", end=" ")
         text = transcribe_with_recovery(client, chunk, prompt, model, "transcribe", d)
+        cache.write_text(text, encoding="utf-8")      # チェックポイント保存
         parts.append(f"## Part {i + 1} — {chunk.name}\n\n{text}")
     print(f"カバレッジ: 約 {covered/60:.1f} 分ぶんのチャンクを処理")
     return "\n\n---\n\n".join(parts)
@@ -522,4 +585,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except QuotaExhaustedError as e:
+        print(f"\n⛔ {e}", file=sys.stderr)
+        sys.exit(2)
