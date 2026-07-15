@@ -24,10 +24,11 @@ from google.genai import errors, types
 
 
 # ── モデル・閾値 ────────────────────────────────────────────────
-TRANSCRIBE_MODEL = "gemini-2.5-flash"   # 文字起こし既定（高速・低コスト優先）
-PRO_MODEL        = "gemini-2.5-pro"     # 品質不良時の自動格上げ先
-FAST_MODEL       = "gemini-2.5-flash"   # 課金枠制限時のフォールバック先
-POST_MODEL       = "gemini-2.5-flash"   # verbatim / summary 生成（後処理）
+TRANSCRIBE_MODEL = "gemini-3.5-flash"   # 文字起こし既定（高速・低コスト優先）
+PRO_MODEL        = "gemini-pro-latest"  # 品質不良時の自動格上げ先
+FAST_MODEL       = "gemini-3.5-flash"   # 課金枠制限時のフォールバック先
+POST_MODEL       = "gemini-3.5-flash"   # verbatim / summary 生成（後処理）
+# 注: gemini-2.5-* は新規プロジェクト（新規ユーザー）では generateContent 不可（404）。現行世代を既定にする。
 LONG_AUDIO_THRESHOLD_SEC = 15 * 60      # これを超える音声は分割モードへ直行
 DEFAULT_CHUNK_MIN = 15                  # 分割時のチャンク長（分）。大きいほど総リクエスト数が減る
 MIN_CHARS_PER_SEC = 1.5                 # チャンク文字数の下限目安（下回れば途切れの疑い）
@@ -35,16 +36,20 @@ POST_BLOCK_CHARS = 24000                # verbatim/summary を分割処理する
 
 # 概算単価（USD / 100 万トークン）。正確な請求額ではない。必要に応じ更新。
 PRICING = {
-    "gemini-2.5-pro":   {"in": 1.25, "out": 10.0},
-    "gemini-2.5-flash": {"in": 0.30, "out": 2.50},
+    "gemini-pro-latest":  {"in": 1.25, "out": 10.0},
+    "gemini-3.5-flash":   {"in": 0.30, "out": 2.50},
+    "gemini-2.5-pro":     {"in": 1.25, "out": 10.0},
+    "gemini-2.5-flash":   {"in": 0.30, "out": 2.50},
 }
 
 # 無料枠の1日リクエスト数（RPD）の目安。Google が随時改定するため正本ではない
 # （2026年に 20→250→1,500 と変動報告あり）。正確な残枠は Google AI Studio のダッシュボードで確認する。
 # 環境変数 GEMINI_FLASH_RPD / GEMINI_PRO_RPD、または --rpd で上書き可。
 FREE_TIER_RPD = {
-    "gemini-2.5-flash": int(os.environ.get("GEMINI_FLASH_RPD", "250")),
-    "gemini-2.5-pro":   int(os.environ.get("GEMINI_PRO_RPD", "100")),
+    "gemini-3.5-flash":  int(os.environ.get("GEMINI_FLASH_RPD", "250")),
+    "gemini-pro-latest": int(os.environ.get("GEMINI_PRO_RPD", "100")),
+    "gemini-2.5-flash":  int(os.environ.get("GEMINI_FLASH_RPD", "250")),
+    "gemini-2.5-pro":    int(os.environ.get("GEMINI_PRO_RPD", "100")),
 }
 # 当ツール経由のリクエスト数・トークン数を太平洋時間の日付ごとに積算する（無料枠消費の目安）
 DAILY_TALLY_PATH = Path.home() / ".config" / "claude-toolkit" / "gemini-usage.json"
