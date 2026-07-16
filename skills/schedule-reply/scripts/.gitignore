@@ -1,0 +1,15 @@
+# --- secrets / auth (NEVER commit) ---
+config.json
+*.credentials.json
+.gmail-*credentials*.json
+.gcal-*credentials*.json
+cookies/
+.pw-user-data/
+
+# --- runtime state / logs (personal data) ---
+logs/
+state.jsonl
+*.log
+
+# --- node ---
+node_modules/

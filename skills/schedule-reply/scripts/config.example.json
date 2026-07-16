@@ -1,0 +1,41 @@
+{
+  "displayName": "山田太郎",
+
+  "gmail": {
+    "credentialsPath": "/Users/<ユーザー名>/.config/gdrive-mcp/.gmail-credentials-private.json",
+    "oauthClientPath": "/Users/<ユーザー名>/.config/gdrive-mcp/credentials.json",
+    "searchQuery": "in:inbox (tonton.amaneku.com OR chouseisan.com) newer_than:14d",
+    "schedulingLabel": "Scheduling"
+  },
+
+  "calendar": {
+    "credentialsPath": "/Users/<ユーザー名>/.config/gdrive-mcp/.gcal-credentials-<アカウント名>.json",
+    "oauthClientPath": "/Users/<ユーザー名>/.config/gdrive-mcp/credentials.json",
+    "calendarIds": ["primary"],
+    "timezone": "Asia/Tokyo"
+  },
+
+  "availability": {
+    "businessDays": [1, 2, 3, 4, 5],
+    "businessStart": "08:00",
+    "businessEnd": "17:00",
+    "slotMinutesWhenNoTime": 60
+  },
+
+  "exclude": {
+    "senders": [],
+    "subjectPatterns": []
+  },
+
+  "browser": {
+    "headless": false,
+    "tontonEditPassword": "",
+    "openForReviewAfterSubmit": true
+  },
+
+  "flags": {
+    "dryRun": true,
+    "relabel": true,
+    "markRead": true
+  }
+}

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.crpc-scheduler</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/<ユーザー名>/crpc-tools/tools/schedule-reply/run.sh</string>
+    </array>
+
+    <!-- 15分ごとにポーリング（config.flags.dryRun が true の間は判定のみ・送信しない） -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- launchd は最小 env で起動するため PATH を明示（run.sh 側でも補強） -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/<ユーザー名>/crpc-tools/tools/schedule-reply/logs/launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/<ユーザー名>/crpc-tools/tools/schedule-reply/logs/launchd.log</string>
+</dict>
+</plist>

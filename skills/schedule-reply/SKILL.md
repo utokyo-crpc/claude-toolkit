@@ -1,0 +1,46 @@
+---
+name: schedule-reply
+description: tonton／調整さんの日程調整入力依頼メールに、カレンダーの空き（config.availabilityで設定した営業時間）でconfig.displayNameの名義で自動回答するスキル。Gmailのinboxを検知し、空き判定→自動入力・送信→送信後にブラウザで確認→処理済みメールを Scheduling ラベルへ移動＋既読化する。「日程調整メールに回答して」「tonton/調整さんに回答して」「スケジューラを回して」「日程調整の自動回答をして」等でトリガーする。実体は scripts/poll.mjs の Node CLI（このスキルは呼び出し口）。要個別セットアップ（config.json作成・Google認証・Playwright）。
+---
+
+# schedule-reply — 日程調整メール自動回答
+
+tonton／調整さんの日程調整入力依頼メールを検知し、カレンダーの空きを config.availability で設定した営業時間で判定して config.displayName の名義で自動回答する。**このSKILL.mdが置かれているディレクトリを基準に、`scripts/poll.mjs` を実行すること。**symlink経由で読み込まれていても、実体のディレクトリを解決してから使う。仕様の正本は `scripts/README.md`。
+
+**利用には個別セットアップが必須**（自分の `config.json` 作成・Google OAuth・Playwright）。詳細は `scripts/README.md` の「セットアップ」参照。
+
+## 用途
+
+- ユーザーが「日程調整メールに回答して」「tonton/調整さんに回答して」「スケジューラを回して」等と言ったとき。
+- 送信せず判定だけ見たいときは dry-run で実行する。
+
+## 実行手順
+
+1. スケジューラを実行する。
+   - 送信あり（既定）：`node <このSKILL.mdのディレクトリ>/scripts/poll.mjs --send --verbose`
+   - 判定のみ（安全確認）：`node <このSKILL.mdのディレクトリ>/scripts/poll.mjs --dry-run --verbose`
+2. 標準出力の要約（ツール・候補数・件名・候補ごとの ◯/△/✕ と根拠・スキップ理由）をそのままユーザーへ報告する。
+3. 送信した場合、CLI が回答ページを既定ブラウザで開く。ユーザーに内容確認を促す。
+4. 処理済みメールは自動で inbox→「Scheduling」へ移動・既読化される（`gmail.modify` 付与済み。未付与時はスキップ警告が出る）。
+
+## 出力の解釈と報告
+
+- 各候補の判定（空き＝◯、一部＝△、不可/時間外/週末＝✕）と根拠を表で伝える。
+- スキップ・除外（config.exclude で設定した送信者・件名パターン／引用のみ／議事録・通知）はログ理由を添えて報告する。
+- エラー時は該当メールを飛ばして次回再試行される（`state.jsonl` で二重回答は防止）。
+
+## 前提条件
+
+- `scripts/config.json` が存在（無ければ `cp scripts/config.example.json scripts/config.json` して自分の値を設定）。既定 `flags.dryRun=false`＝送信あり。
+- Playwright がローカル解決可能（`scripts/node_modules/playwright`。無ければ README のフォールバックで symlink）。
+- カレンダー・Gmailのトークンが有効。切れたら認証設定に従い再認証。
+
+## 注意
+
+- 実在ポーリング（メール差出人に見える）への書き込みを伴う。誤検知が疑わしいときは先に `--dry-run` で確認する。
+- tonton は同名＋パスワード（`config.browser.tontonEditPassword`）で既存回答を削除して上書きするため再実行しても重複しない。
+- 無人自動巡回は launchd（`scripts/schedule-reply.plist.example`）で別途設定。本スキルは会話経由の都度実行用。
+
+## 参照
+
+- `scripts/README.md` — 仕様・判定ロジック・セットアップ・本番投入
