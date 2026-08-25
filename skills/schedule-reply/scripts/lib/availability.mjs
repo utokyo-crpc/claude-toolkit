@@ -87,6 +87,30 @@ export function judge(candidate, busy, cfg, { supportsTriangle = true } = {}) {
   return supportsTriangle ? { mark: '△', reason: '一部空き(要調整)' } : { mark: '◯', reason: '空き枠あり' };
 }
 
+const ABSENCE_KEYWORDS_DEFAULT = ['出張', '休暇', '有給', '不在', '休み', '休業'];
+
+// All-day events default to transparency=transparent in Google Calendar, so
+// freeBusy silently drops them (e.g. a multi-day business-trip event created
+// without explicitly setting transparency=opaque). Recover any all-day event
+// whose title looks like an absence and fold it into the busy list — even
+// though the calendar says "free", it should still count as busy here.
+// Events already opaque are skipped (freeBusy already counted them); this is
+// a fallback for the transparent case only, gated on a title keyword so an
+// unrelated all-day event (anniversary, non-absence note) isn't force-busied.
+export function mergeAbsenceEvents(busy, allDayEvents, keywords = ABSENCE_KEYWORDS_DEFAULT) {
+  const extra = [];
+  for (const ev of allDayEvents || []) {
+    if (ev.transparency !== 'transparent') continue;
+    if (!keywords.some((k) => ev.summary.includes(k))) continue;
+    extra.push({
+      start: new Date(`${ev.start}T00:00:00+09:00`),
+      end: new Date(`${ev.end}T00:00:00+09:00`), // events.list end.date is exclusive (matches busy semantics)
+    });
+  }
+  if (!extra.length) return busy;
+  return [...busy, ...extra].sort((a, b) => a.start - b.start);
+}
+
 // Bounding window (ISO) covering all candidates, for a single freeBusy query.
 export function boundingWindow(candidates) {
   const dates = candidates

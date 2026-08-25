@@ -19,7 +19,8 @@
     "businessDays": [1, 2, 3, 4, 5],
     "businessStart": "08:00",
     "businessEnd": "17:00",
-    "slotMinutesWhenNoTime": 60
+    "slotMinutesWhenNoTime": 60,
+    "absenceKeywords": ["出張", "休暇", "有給", "不在", "休み", "休業"]
   },
 
   "exclude": {

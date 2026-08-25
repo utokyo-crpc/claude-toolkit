@@ -48,6 +48,19 @@ function extractEmail(fromHeader) {
   return (m ? m[1] : fromHeader).trim().toLowerCase();
 }
 
+// A NOTIFICATION_ONLY keyword doesn't mark the mail as a pure notification if it
+// only appears inside a concessive clause ("議事録は追って共有しますが、〜") that
+// hands off to a request later in the same sentence. Look at the keyword's own
+// sentence (up to the next 。/\n) and require it NOT end in a concessive connector.
+function isConcessiveMention(main, keyword) {
+  const idx = main.indexOf(keyword);
+  if (idx === -1) return false;
+  const rest = main.slice(idx);
+  const end = rest.search(/[。\n]/);
+  const sentence = end === -1 ? rest : rest.slice(0, end);
+  return /(ます|でし?)?(が|ものの|けれども)[、,]\s*$/.test(sentence);
+}
+
 export function classify(mail, cfg) {
   const main = `${mail.subject}\n${mainMessage(mail.body)}`;
 
@@ -80,8 +93,9 @@ export function classify(mail, cfg) {
   }
 
   // 3) main message must be an input request, not a notification/minutes
-  if (NOTIFICATION_ONLY.some((k) => main.includes(k))) {
-    return { matched: false, tool, url, pollId, reason: '通知・議事録・結果共有と判定（メインは入力依頼でない）' };
+  const notificationHit = NOTIFICATION_ONLY.find((k) => main.includes(k) && !isConcessiveMention(main, k));
+  if (notificationHit) {
+    return { matched: false, tool, url, pollId, reason: `通知・議事録・結果共有と判定（メインは入力依頼でない：「${notificationHit}」）` };
   }
   const hasRequest = REQUEST_KEYWORDS.some((k) => main.includes(k));
   if (!hasRequest) {

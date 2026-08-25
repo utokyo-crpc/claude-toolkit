@@ -151,5 +151,26 @@ export function makeCalendar(client) {
     }
     return busy.sort((a, b) => a.start - b.start);
   };
-  return { freeBusy };
+
+  // All-day events (start.date, not start.dateTime) in the window, across calendars.
+  // Used as a freeBusy fallback: an all-day event with transparency=transparent
+  // (Google Calendar's default for all-day events) is silently absent from
+  // freeBusy — this recovers events whose title looks like an absence anyway.
+  const listAllDayEvents = async ({ calendarIds, timeMin, timeMax }) => {
+    const events = [];
+    for (const id of calendarIds) {
+      const u = new URL(`${CAL}/calendars/${encodeURIComponent(id)}/events`);
+      u.searchParams.set('timeMin', timeMin);
+      u.searchParams.set('timeMax', timeMax);
+      u.searchParams.set('singleEvents', 'true');
+      const r = await client.api(u.toString());
+      for (const ev of r.items || []) {
+        if (ev.status === 'cancelled' || !ev.start?.date) continue;
+        events.push({ summary: ev.summary || '', start: ev.start.date, end: ev.end.date, transparency: ev.transparency || 'opaque' });
+      }
+    }
+    return events;
+  };
+
+  return { freeBusy, listAllDayEvents };
 }

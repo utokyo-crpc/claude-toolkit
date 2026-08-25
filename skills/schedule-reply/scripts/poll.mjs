@@ -22,7 +22,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { makeClient, makeGmail, makeCalendar, parseMessage } from './lib/google.mjs';
 import { classify } from './lib/classify.mjs';
-import { judge, boundingWindow } from './lib/availability.mjs';
+import { judge, boundingWindow, mergeAbsenceEvents } from './lib/availability.mjs';
 import { withBrowser, getAdapter, openForReview } from './lib/browser.mjs';
 import { printSummary, candidateLabel, makeFileLogger } from './lib/logger.mjs';
 import { loadProcessed, markProcessed } from './lib/state.mjs';
@@ -111,9 +111,14 @@ async function main() {
 
         // --- 4) availability ---
         const { timeMin, timeMax } = boundingWindow(candidates);
-        const busy = await calendar.freeBusy({
+        const freeBusyList = await calendar.freeBusy({
           calendarIds: cfg.calendar.calendarIds, timeMin, timeMax, timezone: cfg.calendar.timezone,
         });
+        // Fallback: recover all-day absence events freeBusy misses due to transparency=transparent.
+        const allDayEvents = await calendar.listAllDayEvents({
+          calendarIds: cfg.calendar.calendarIds, timeMin, timeMax,
+        });
+        const busy = mergeAbsenceEvents(freeBusyList, allDayEvents, cfg.availability?.absenceKeywords);
         const decisions = candidates.map((cand) => ({
           candidate: cand,
           ...judge(cand, busy, cfg, { supportsTriangle: adapter.supportsTriangle }),
