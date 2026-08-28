@@ -138,7 +138,7 @@ launchctl unload ~/Library/LaunchAgents/com.schedule-reply.plist
   - 無い/週末 → ✕、有り かつ 業務時間の半分以上空き → ◯、有るが混雑 → △。
 - タイムゾーンは Asia/Tokyo 固定。
 - 空き判定は **freeBusy（config.calendar.calendarIds）** に基づく。予定あり・不在・仮予定（未確定）など不透過イベントは全て busy として反映され、空き時間のみ ◯。判定はポーリング検知時点のカレンダーで行うため、回答後にカレンダーを変更した場合は内容がずれ得る（tonton は同名＋パスワードで再送信すれば既存回答を削除して上書きする）。
-- **終日イベントのフォールバック**：Google Calendar は終日イベントを既定で `transparency=transparent`（空き扱い）で作成するため、出張・休暇等の終日イベントを transparency 未設定のまま作ると freeBusy がその期間を素通りする（実例：2026-08-25、10日間の出張イベントが transparent のままで tonton に◯/△回答してしまった）。恒久対策は作成時に `transparency=opaque` を明示すること（`~/Projects/ai-environment/scripts/gcal-patch-event.mjs` で PATCH）だが、それを徹底できていない場合の保険として、`lib/availability.mjs` の `mergeAbsenceEvents` が対象期間の終日イベントを別途取得し、タイトルが `config.availability.absenceKeywords`（既定：出張・休暇・有給・不在・休み・休業）に一致する transparent イベントを busy へ強制的に合流させる。
+- **終日イベントのフォールバック**：Google Calendar は終日イベントを既定で `transparency=transparent`（空き扱い）で作成するため、出張・休暇等の終日イベントを transparency 未設定のまま作ると freeBusy がその期間を素通りする（実例：2026-08-25、10日間の出張イベントが transparent のままで tonton に◯/△回答してしまった）。恒久対策は作成時に `transparency=opaque` を明示すること（既存イベントは Calendar API の `events.patch` で `transparency` を `opaque` に更新する）だが、それを徹底できていない場合の保険として、`lib/availability.mjs` の `mergeAbsenceEvents` が対象期間の終日イベントを別途取得し、タイトルが `config.availability.absenceKeywords`（既定：出張・休暇・有給・不在・休み・休業）に一致する transparent イベントを busy へ強制的に合流させる。
 
 ## ファイル構成
 
