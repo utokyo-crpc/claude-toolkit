@@ -42,7 +42,9 @@ def fmt_rate(label, pct, resets_at, time_fmt):
 model = data.get('model', {}).get('display_name', 'Claude')
 # Remove "Claude " prefix if present for compactness
 model = model.removeprefix('Claude ')
-parts = [f'{BOLD}{model}{R}']
+effort = data.get('effort', {}).get('level')
+model_str = f'{BOLD}{model}{R} {DIM}{effort}{R}' if effort else f'{BOLD}{model}{R}'
+parts = [model_str]
 
 ctx = data.get('context_window', {}).get('used_percentage')
 if ctx is not None:
@@ -60,7 +62,13 @@ if week is not None:
     date_fmt = '%#m/%#d' if sys.platform == 'win32' else '%-m/%-d'
     parts.append(fmt_rate('7d', week, week_data.get('resets_at'), date_fmt))
 
-cwd = data.get('cwd') or data.get('workspace', {}).get('current_dir', '')
+workspace = data.get('workspace', {})
+# project_dir はセッション起動時のディレクトリで固定（cwd/current_dir は cd 等で変わる）
+cwd = workspace.get('project_dir') or data.get('cwd') or workspace.get('current_dir', '')
+# worktree 内なら worktrees/<名前> ではなく本体プロジェクト名を表示する
+WORKTREE_MARKER = '/.claude/worktrees/'
+if WORKTREE_MARKER in cwd:
+    cwd = cwd.split(WORKTREE_MARKER)[0]
 folder = os.path.basename(cwd) if cwd else '-'
 parts.append(f'{BOLD}{folder}{R}')
 
