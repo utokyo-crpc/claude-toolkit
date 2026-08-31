@@ -65,10 +65,14 @@ if week is not None:
 workspace = data.get('workspace', {})
 # project_dir はセッション起動時のディレクトリで固定（cwd/current_dir は cd 等で変わる）
 cwd = workspace.get('project_dir') or data.get('cwd') or workspace.get('current_dir', '')
-# worktree 内なら worktrees/<名前> ではなく本体プロジェクト名を表示する
+# worktree 内なら worktrees/<名前> 直下ではなく、その先のサブプロジェクト名を表示する
+# （worktree 直下で作業している場合のみ、worktree 名を避けて本体プロジェクト名にフォールバックする）
 WORKTREE_MARKER = '/.claude/worktrees/'
 if WORKTREE_MARKER in cwd:
-    cwd = cwd.split(WORKTREE_MARKER)[0]
+    root, rest = cwd.split(WORKTREE_MARKER, 1)
+    rest_parts = rest.split('/', 1)
+    if len(rest_parts) < 2 or not rest_parts[1]:
+        cwd = root
 folder = os.path.basename(cwd) if cwd else '-'
 parts.append(f'{BOLD}{folder}{R}')
 
