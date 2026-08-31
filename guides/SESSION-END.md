@@ -19,7 +19,10 @@
 - 日付付きファイル `docs/work-logs/YYYYMMDD-work-log.md` に当日の作業内容をまとめる。既存の当日ログがあれば追記、なければ新規作成
 - **【必須・recency bias 対策】ログは「現在の文脈の記憶」からではなく、必ず当セッションの全トランスクリプト(JSONL)から作業トレースを抽出して再構成する。** `/compact` 後はセッション前半が要約で圧縮され記憶が後半に偏るため、記憶だけで書くと前半作業が欠落する。次のコマンドで全期間の成果物・調査・意思決定を抽出してから書く：
   ```bash
-  TX=$(ls -t ~/.claude/projects/"$(pwd | sed 's#/#-#g')"/*.jsonl 2>/dev/null | head -1)
+  # ディレクトリ名は `/` と `.` の両方が `-` になる。`.` を落とすと worktree
+  # セッション（パスに `/.claude/` を含む）で必ず空振りする
+  TX=$(ls -t ~/.claude/projects/"$(pwd | sed 's#[/.]#-#g')"/*.jsonl 2>/dev/null | head -1)
+  [ -n "$TX" ] || echo "トランスクリプトが見つからない — ディレクトリ名の変換を疑う" >&2
   jq -r 'select(.type=="assistant").message.content[]?|select(.type=="tool_use" and (.name=="Write" or .name=="Edit"))|.name+"  "+.input.file_path' "$TX" | sort -u      # 作成/編集ファイル
   jq -r 'select(.type=="assistant").message.content[]?|select(.type=="tool_use" and .name=="Bash")|.input.description' "$TX" | sort -u                                     # Bash 経由の作業
   jq -r 'select(.type=="assistant").message.content[]?|select(.type=="tool_use" and (.name=="WebSearch" or .name=="WebFetch"))|(.input.query // .input.url)' "$TX"      # 調査
