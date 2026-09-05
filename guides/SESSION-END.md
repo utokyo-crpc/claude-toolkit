@@ -1,6 +1,6 @@
 # セッション終了ルーチン
 
-「セッションを終わります」「終えます」「終了します」等の発言を検知したら、以下を**確認なしに順番に実行**する。
+「セッションを終わります」「終えます」「終了します」等の発言を検知したら、以下を**確認なしに順番に実行**する。Claude Code から実行しても Codex から実行しても手順は同じで、違うのは Step 2 のトランスクリプト取得と Step 6 だけ（該当箇所に分岐を書いてある）。
 
 **`~/.claude/SESSION-END-local.md` があれば併せて読み、そこで指定された追加ステップ・上書きを指示された位置に挿入して実行する**（無ければスキップ）。個人・組織に固有の手順はそちらにある。
 
@@ -18,6 +18,7 @@
 ## Step 2: 作業ログの作成・更新
 - 日付付きファイル `docs/work-logs/YYYYMMDD-work-log.md` に当日の作業内容をまとめる。既存の当日ログがあれば追記、なければ新規作成
 - **【必須・recency bias 対策】ログは「現在の文脈の記憶」からではなく、必ず当セッションの全トランスクリプト(JSONL)から作業トレースを抽出して再構成する。** `/compact` 後はセッション前半が要約で圧縮され記憶が後半に偏るため、記憶だけで書くと前半作業が欠落する。次のコマンドで全期間の成果物・調査・意思決定を抽出してから書く：
+  Claude Code から実行している場合：
   ```bash
   # ディレクトリ名は `/` と `.` の両方が `-` になる。`.` を落とすと worktree
   # セッション（パスに `/.claude/` を含む）で必ず空振りする
@@ -27,6 +28,16 @@
   jq -r 'select(.type=="assistant").message.content[]?|select(.type=="tool_use" and .name=="Bash")|.input.description' "$TX" | sort -u                                     # Bash 経由の作業
   jq -r 'select(.type=="assistant").message.content[]?|select(.type=="tool_use" and (.name=="WebSearch" or .name=="WebFetch"))|(.input.query // .input.url)' "$TX"      # 調査
   jq -r 'select(.type=="assistant").message.content[]?|select(.type=="tool_use" and .name=="AskUserQuestion")|.input.questions[]?.header' "$TX"                            # 意思決定
+  ```
+  Codex から実行している場合（セッション記録は `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`。起動時の cwd が `session_meta` に入るので、現在のディレクトリに一致する最新の記録を選ぶ）：
+  ```bash
+  TX=$(for f in $(ls -t ~/.codex/sessions/*/*/*/rollout-*.jsonl 2>/dev/null); do
+         jq -e --arg cwd "$PWD" 'select(.type=="session_meta" and .payload.cwd==$cwd)' "$f" >/dev/null 2>&1 && { echo "$f"; break; }
+       done)
+  [ -n "$TX" ] || echo "トランスクリプトが見つからない — cwd が session_meta.payload.cwd と一致しない" >&2
+  jq -r 'select(.type=="response_item" and .payload.type=="custom_tool_call")|.payload.input' "$TX"                                    # exec 経由の作業。ファイルの作成・編集もシェル経由なのでここに出る
+  jq -r 'select(.type=="response_item" and .payload.type=="function_call")|.payload.name+"  "+(.payload.arguments|tostring|.[0:200])' "$TX"   # exec 以外のツール呼び出し（apply_patch・web 検索等）
+  jq -r 'select(.type=="response_item" and .payload.type=="message" and .payload.role=="user")|.payload.content[]?.text? // empty' "$TX" | head -c 4000   # ユーザーの指示（意思決定の手がかり）
   ```
   **`Write`・`Edit` の行だけでは足りない。** `sed -i`・スクリプト実行・`git mv`・インストーラなど Bash 経由の書き換えはファイルパスとして現れないため、Bash 行（`description`）を併せて読む。コマンド文字列そのものはリダイレクトや `2>/dev/null` を拾ってノイズになるので、`description` を使う。
   抽出結果を**作業ストリーム単位**でまとめ、セッション全期間を網羅する。**書き終えたら `git status --porcelain` と `git log --stat -3` で実際の変更と突き合わせ、ログに挙げた成果物と食い違わないか確認する**（JSONL 側は「やろうとしたこと」、git 側は「実際に残ったもの」で、失敗・巻き戻しがあると両者はずれる）。
@@ -53,6 +64,7 @@
 - コミットメッセージは変更内容を端的に示す（例: `Add taro sprouting plan and 2026-05-09 work log`）
 
 ## Step 6: ユーザーへの操作依頼
+- Codex から実行している場合はこの Step を省く（`/rename` は Claude Code の機能）。決めた名前だけを本文で示して終える
 - セッション内容を表す短い名前（kebab-case、例: `plant-taro-sprouting-plan`, `gas-member-sync-setup`）を決め、`/rename <名前>` の形でクリップボードに入れる（そのまま貼り付けて実行できるように）。入れ方は `~/.claude/conventions/copy-paste-output-format.md`「クリップボードへの入れ方」に従う
 - ユーザーへは**決めた名前を省略せず全文で示す**。`/rename ...` のように省略しない——クリップボードは貼り付け前に他のコピー操作で上書きされ得るため、省略形だと何を貼るべきだったか復元できなくなる（規約: `~/.claude/conventions/copy-paste-output-format.md`「クリップボードに入れた内容は本文にも省略せずそのまま書く」）。以下の形で伝える：
 ```
